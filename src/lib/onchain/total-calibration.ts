@@ -181,7 +181,7 @@ export function resolveCalibratedTotal(
  * uses this percent gate — see sanitizeOscillatingBasisBands /
  * sanitizeOscillatingTotals (structural bimodal + returning-valley pin).
  * Kept at 0.5% (floor $150) so fresh-Rabby rejection still fires on the
- * 某钱包 ~$450–530 public↔defi band (~0.8%).
+ * Large-wallet ~$450–530 public↔defi band (~0.8%).
  */
 export function coverageFlapTolerance(usd: number): number {
   return Math.max(150, Math.abs(usd) * 0.005);
@@ -190,13 +190,13 @@ export function coverageFlapTolerance(usd: number): number {
 /**
  * Rabby is refreshed about every 10 minutes. OKX/Zerion cover a different
  * chain set, so letting them replace a fresh Rabby total makes NAV flap
- * (Linea ~175 vs ~1622, 某钱包 ~50120 vs ~48300) until Rabby writes back.
+ * (e.g. Linea ~175 vs ~1622, another wallet ~50120 vs ~48300) until Rabby writes back.
  * Keep the Rabby figure while it is younger than 25 minutes and the
  * calibrated total disagrees by more than max($150, 0.5%). Older Rabby totals
  * may still fall through to calibration.
  *
  * 0.5% (tightened from 1%, which followed an earlier 3%) is the coverage-flap
- * line. On a ~$60k wallet, OKX/direct vs Rabby for 某钱包 has sat in both a
+ * line. On a ~$60k wallet, OKX/direct vs Rabby has sat in both a
  * ~$1,500 band (~2.5%) and a tighter ~$450–530 band (~0.8%); both must stick
  * on Rabby. Sub-$150 or sub-0.5% ticks are still ordinary price noise.
  *

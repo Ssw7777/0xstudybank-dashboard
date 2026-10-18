@@ -64,12 +64,12 @@ test('fresh Rabby is not replaced by a materially different OKX/Zerion total', (
   assert.equal(calibrationDisagreesWithFreshRabby({
     previousUsd: 50120.56, previousSource: 'public', previousSuccessAt: fresh, nextUsd: 48280, nowMs: now,
   }), true);
-  // 某钱包 after the ~$10k Gate transfer: Rabby 59814 vs OKX/direct 58336 (~2.5%, under the old 3% rule).
+  // Fixture after a ~$10k CEX→wallet transfer: Rabby 59814 vs OKX/direct 58336 (~2.5%, under the old 3% rule).
   assert.equal(calibrationDisagreesWithFreshRabby({
     previousUsd: 59814.22, previousSource: 'public', previousSuccessAt: fresh, nextUsd: 58335.89, nowMs: now,
   }), true);
   assert.equal(totalsDisagreeMaterially(59814.22, 58335.89), true);
-  // 某钱包 2026-10-08: public ~59225 vs defi ~58759 (~0.8%). Old 1% (~$592) missed it.
+  // Fixture: public ~59225 vs defi ~58759 (~0.8%). Old 1% (~$592) missed it.
   assert.equal(totalsDisagreeMaterially(59224.81, 58759.37), true);
   assert.equal(calibrationDisagreesWithFreshRabby({
     previousUsd: 59224.81, previousSource: 'public', previousSuccessAt: fresh, nextUsd: 58759.37, nowMs: now,
@@ -284,7 +284,7 @@ test('sanitizeSpuriousWalletSpikes rewrites dust-wallet chart sawtooth and fixes
   assert.equal(snapshots[3].wallets[dustWallet], 0.44);
 });
 
-test('sanitizeOscillatingBasisBands flattens 某钱包 Rabby/OKX sawtooth and keeps the public band', () => {
+test('sanitizeOscillatingBasisBands flattens Rabby/OKX sawtooth and keeps the public band', () => {
   const binance = '0x5555555555555555555555555555555555555555';
   const linea = '0x3333333333333333333333333333333333333333';
   const pub = 59814.22;

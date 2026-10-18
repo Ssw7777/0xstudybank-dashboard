@@ -47,8 +47,8 @@ test('a direct band Rabby later confirms is not flattened', () => {
   assert.equal(out.snapshots[1].wallets['0xabc'], 58243.07);
 });
 
-test('0.8% public↔defi sawtooth on 某钱包 is clamped by oscillating bands', () => {
-  // Real 2026-10-08 bands: public ~59225 / defi ~58759 (~$466, under the old 1% line).
+test('0.8% public↔defi sawtooth is clamped by oscillating bands', () => {
+  // Fixture bands: public ~59225 / defi ~58759 (~$466, under the old 1% line).
   const snaps = [
     point('2026-10-08T04:01:00.000Z', 82421, 59224.81, 'public'),
     point('2026-10-08T04:11:00.000Z', 81956, 58759.37, 'defi'),

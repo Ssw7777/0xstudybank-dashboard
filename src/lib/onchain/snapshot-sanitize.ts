@@ -449,11 +449,11 @@ export function sanitizeRoundTripBasisBands(snapshots: SnapshotPoint[]): {
 }
 
 /**
- * Numeric two-band sawtooth without needing basis labels (某钱包 06:25–06:40
- * on 2026-10-08: both sides tagged defi, ±$470). Once two stable levels and
- * repeated switching are detected, pin EVERY low-band point onto the nearest
- * high-band anchor — whole segment, not only a single A→B→A mid. Caps at 12%
- * so a real Gate→on-chain step is never flattened. Peaks stay (keep Rabby).
+ * Numeric two-band sawtooth without needing basis labels (both sides may be
+ * tagged the same source). Once two stable levels and repeated switching are
+ * detected, pin EVERY low-band point onto the nearest high-band anchor —
+ * whole segment, not only a single A→B→A mid. Caps at 12% so a real
+ * CEX→on-chain step is never flattened. Peaks stay (prefer Rabby).
  */
 export function sanitizeValueRoundTrips(snapshots: SnapshotPoint[]): {
   snapshots: SnapshotPoint[];
