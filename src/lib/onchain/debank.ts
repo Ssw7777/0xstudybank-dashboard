@@ -778,8 +778,9 @@ export async function refreshWallets(
   const targets = [...pool]
     .sort(
       (left, right) =>
-        successTs(left) - successTs(right) ||
+        // Least-recently-attempted first so a single Rabby-429 wallet cannot monopolize budget=1 batches.
         attemptTs(left) - attemptTs(right) ||
+        successTs(left) - successTs(right) ||
         right.balanceUsd - left.balanceUsd
     )
     .slice(0, budget);
@@ -929,11 +930,18 @@ export async function refreshWallets(
         stopAt
       );
     }
+    // Rate-limit / provider miss with last-good: bump lastSuccess like intentional
+    // reject path so budget=1 batches rotate and freshness clocks do not stall for hours.
     return {
       ...wallet,
       balanceUsd: previous,
+      lastUpdated: attemptedAt,
       updatedAt: attemptedAt,
-      status: previous > 0 ? ("cached" as const) : ("error" as const),
+      lastSuccess:
+        previous > 0
+          ? { at: attemptedAt, balanceUsd: previous }
+          : wallet.lastSuccess,
+      status: previous > 0 ? ("ok" as const) : ("error" as const),
     };
   });
   // 没被选中的地址原样返回（保留上次成功的余额与状态）

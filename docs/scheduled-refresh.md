@@ -108,3 +108,13 @@ journalctl -u dashboard-refresh.service -n 20 --no-pager
 2. 故意错误 Secret → 401 / 403
 3. `systemctl list-timers`（或 crontab）显示定时器在跑，看板快照时间持续推进
 4. 公开 Git 历史中无真实域名、IP、Key、钱包地址
+
+## 限流时的钱包刷新行为
+
+自托管时若链上提供商（如 Rabby）返回限流：
+
+- 队列优先选择「最久未尝试」的地址，避免单个地址反复占满小预算批次
+- 限流且仍有上次成功余额时，保留该余额并推进新鲜度时间戳，避免「最旧钱包」时钟卡死
+- 若你自行编写多车道 cron（含 `wallet-batch` 失败熔断），建议在连续失败后设置约 **15 分钟冷却再自动复位**，以免刷新整日停摆
+
+示例入口见 [examples/cron-refresh.sh](./examples/cron-refresh.sh)。
