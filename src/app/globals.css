@@ -1962,6 +1962,11 @@ textarea.field {
   width: 100%;
 }
 
+.series-tags text {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
 .chart-tooltip {
   min-width: 200px;
   border: 1px solid var(--line);

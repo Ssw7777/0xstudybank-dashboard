@@ -1,10 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Area, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ComposedChart, Customized, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { ChangeRangeKey, ChangeSummary } from "@/lib/changes";
 import { CHANGE_RANGES } from "@/lib/changes";
 import type { SnapshotPoint } from "@/lib/types";
+import {
+  buildSeriesTags,
+  paddedDomain,
+  placeSeriesTags,
+  sharedTagBox,
+  type PlotBox,
+} from "./chart-tags";
 import { cny, deltaClass, signedPct, signedUsd, usd } from "./format";
 
 function formatPointTime(iso: string) {
@@ -45,16 +52,16 @@ function ChartTooltip({
       <div className="grid">
         <span>
           <i className="tip-dot" style={{ background: "var(--blue)" }} />
-          链上
-        </span>
-        <b>{usd(point.onchain)}</b>
-        <span>
-          <i className="tip-dot" style={{ background: "var(--ink-2)" }} />
           交易所
         </span>
         <b>{usd(point.cex)}</b>
         <span>
           <i className="tip-dot" style={{ background: "var(--accent)" }} />
+          链上
+        </span>
+        <b>{usd(point.onchain)}</b>
+        <span>
+          <i className="tip-dot" style={{ background: "var(--ink-2)" }} />
           手动
         </span>
         <b>{usd(point.manual)}</b>
@@ -72,7 +79,110 @@ function formatAxisTick(value: number) {
   return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
-/** 资产趋势：DeBank 那种细面积图，右侧是 1 小时 / 12 小时 / 24 小时 / 7 天切换。 */
+interface LineVertex {
+  x?: number;
+  y?: number;
+  value?: number;
+}
+
+interface FormattedSeries {
+  item?: { props?: { dataKey?: string } };
+  props?: { points?: LineVertex[] };
+}
+
+function plotBoxOf(offset?: { top?: number; left?: number; width?: number; height?: number }): PlotBox | null {
+  if (!offset) return null;
+  const left = offset.left ?? 0;
+  const top = offset.top ?? 0;
+  const width = offset.width ?? 0;
+  const height = offset.height ?? 0;
+  if (width < 40 || height < 40) return null;
+  return { left, top, width, height };
+}
+
+function seriesVertices(items: FormattedSeries[] | undefined, key: string) {
+  const series = items?.find((entry) => entry.item?.props?.dataKey === key);
+  const points = series?.props?.points;
+  if (!points?.length) return null;
+  return points;
+}
+
+function SeriesTags(props: {
+  offset?: { top?: number; left?: number; width?: number; height?: number };
+  formattedGraphicalItems?: FormattedSeries[];
+}) {
+  const plot = plotBoxOf(props.offset);
+  const cex = seriesVertices(props.formattedGraphicalItems, "cex");
+  const onchain = seriesVertices(props.formattedGraphicalItems, "onchain");
+  if (!plot || !cex || !onchain) return null;
+
+  const length = Math.min(cex.length, onchain.length);
+  const { index, tags: specs } = buildSeriesTags(
+    Array.from({ length }, (_, i) => ({
+      cex: cex[i]?.value ?? 0,
+      onchain: onchain[i]?.value ?? 0,
+    })),
+  );
+  const anchorX = cex[index]?.x;
+  const anchorY = {
+    cex: cex[index]?.y,
+    onchain: onchain[index]?.y,
+  };
+  if (anchorX == null || anchorY.cex == null || anchorY.onchain == null) return null;
+  // y comes from that series' own drawn vertex, not from the other axis or the latest sample.
+  const tags = specs.map((series) => ({
+    key: series.key,
+    name: series.name,
+    color: series.color,
+    anchorX,
+    anchorY: anchorY[series.key] as number,
+    anchorValue: series.anchorValue,
+    labelValue: series.labelValue,
+  }));
+  const box = sharedTagBox(tags.map((tag) => ({ name: tag.name, valueLabel: usd(tag.labelValue) })));
+  const placed = placeSeriesTags(tags, plot, box);
+
+  return (
+    <g className="series-tags" pointerEvents="none">
+      {placed.map((tag) => (
+        <g key={tag.key} data-series={tag.key} data-anchor={tag.anchorValue}>
+          <rect
+            x={tag.left}
+            y={tag.top}
+            width={box.width}
+            height={box.height}
+            rx={6}
+            fill="rgba(255,255,255,0.94)"
+            stroke="var(--line)"
+          />
+          <text
+            x={tag.left + box.width / 2}
+            y={tag.top + 17}
+            textAnchor="middle"
+            fill={tag.color}
+            fontSize={12}
+            fontWeight={600}
+          >
+            {tag.name}
+          </text>
+          <text
+            className="num"
+            x={tag.left + box.width / 2}
+            y={tag.top + 33}
+            textAnchor="middle"
+            fill={tag.color}
+            fontSize={12}
+            fontWeight={500}
+          >
+            {usd(tag.labelValue)}
+          </text>
+        </g>
+      ))}
+    </g>
+  );
+}
+
+/** 资产趋势：交易所余额走左轴，链上资金走右轴，图内标注跟各自的线。 */
 export function PortfolioChart({
   snapshots,
   usdCnyRate = 6.66,
@@ -104,19 +214,17 @@ export function PortfolioChart({
     }));
   }, [snapshots, activeRange.ms]);
 
-  const yDomain = useMemo((): [number, number] => {
-    if (!data.length) return [0, 1];
-    const values = data.map((point) => point.v);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    // 紧贴曲线实际波动区间：只留 8% 呼吸空间，波动一眼可见
-    const pad = Math.max((max - min) * 0.12, 0.5);
-    return [min - pad, max + pad];
-  }, [data]);
+  const cexDomain = useMemo(() => paddedDomain(data.map((point) => point.cex)), [data]);
+  const onchainDomain = useMemo(() => paddedDomain(data.map((point) => point.onchain)), [data]);
 
   const total = summary?.total ?? null;
   const lastPoint = data.length ? data[data.length - 1] : null;
   void activeIdx;
+
+  const tickFor = (domain: [number, number]) => (value: number) =>
+    domain[1] - domain[0] < 1000
+      ? Number(value).toLocaleString("en-US", { maximumFractionDigits: domain[1] - domain[0] < 10 ? 2 : 0 })
+      : formatAxisTick(Number(value));
 
   return (
     <section className="section" id="trend">
@@ -182,7 +290,7 @@ export function PortfolioChart({
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={data}
-            margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+            margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
             onMouseMove={(state) => {
               if (state && state.activeTooltipIndex != null) {
                 setActiveIdx(Number(state.activeTooltipIndex));
@@ -190,12 +298,6 @@ export function PortfolioChart({
             }}
             onMouseLeave={() => setActiveIdx(null)}
           >
-            <defs>
-              <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.22} />
-                <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.02} />
-              </linearGradient>
-            </defs>
             <XAxis
               dataKey="t"
               tick={{ fontSize: 12, fill: "var(--ink-3)" }}
@@ -204,15 +306,27 @@ export function PortfolioChart({
               minTickGap={48}
             />
             <YAxis
-              domain={yDomain}
-              tick={{ fontSize: 12, fill: "var(--ink-3)" }}
+              yAxisId="cex"
+              domain={cexDomain}
+              allowDataOverflow
+              tick={{ fontSize: 12, fill: "var(--blue)" }}
               axisLine={false}
               tickLine={false}
-              width={70}
+              width={64}
               tickCount={5}
-              tickFormatter={(value) => yDomain[1] - yDomain[0] < 1000
-                ? Number(value).toLocaleString("en-US", { maximumFractionDigits: yDomain[1] - yDomain[0] < 10 ? 2 : 0 })
-                : formatAxisTick(Number(value))}
+              tickFormatter={tickFor(cexDomain)}
+            />
+            <YAxis
+              yAxisId="onchain"
+              orientation="right"
+              domain={onchainDomain}
+              allowDataOverflow
+              tick={{ fontSize: 12, fill: "var(--accent)" }}
+              axisLine={false}
+              tickLine={false}
+              width={58}
+              tickCount={5}
+              tickFormatter={tickFor(onchainDomain)}
             />
             <Tooltip
               content={<ChartTooltip rate={rate} />}
@@ -220,16 +334,10 @@ export function PortfolioChart({
               isAnimationActive={false}
               allowEscapeViewBox={{ x: false, y: true }}
             />
-            <Area
-              type="monotone"
-              dataKey="v"
-              stroke="none"
-              fill="url(#trendFill)"
-              isAnimationActive={false}
-            />
             <Line
+              yAxisId="onchain"
               type="monotone"
-              dataKey="v"
+              dataKey="onchain"
               stroke="var(--accent)"
               strokeWidth={2.25}
               strokeLinecap="round"
@@ -238,6 +346,19 @@ export function PortfolioChart({
               activeDot={{ r: 4, stroke: "#fff", strokeWidth: 2, fill: "var(--accent)" }}
               isAnimationActive={false}
             />
+            <Line
+              yAxisId="cex"
+              type="monotone"
+              dataKey="cex"
+              stroke="var(--blue)"
+              strokeWidth={2.25}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              dot={false}
+              activeDot={{ r: 4, stroke: "#fff", strokeWidth: 2, fill: "var(--blue)" }}
+              isAnimationActive={false}
+            />
+            <Customized component={SeriesTags} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
